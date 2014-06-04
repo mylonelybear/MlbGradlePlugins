@@ -13,13 +13,47 @@ class PackerPlugin implements Plugin<Project> {
 
         project.configurations {
             base
+            resource
         }
 
         project.task('clean') << {
             project.delete project.packer.buildDir
         }
 
-        project.task('build') {
+        project.task('prepare') {
+            outputs.dir project.packer.baseBuildDir
+            outputs.dir project.packer.resourcesBuildDir
+
+            inputs.files project.configurations.base
+            inputs.files project.configurations.resource
+            inputs.dir project.packer.resourcesDir
+
+
+            doLast {
+                def baseZip = project.file(project.configurations.base.asPath)
+                def resourcesZip = project.file(project.configuraitons.resource.asPath)
+
+                project.copy {
+                    from project.zipTree(baseZip)
+                    into packer.baseBuildDir
+                }
+
+                project.file(packer.resourcesBuildDir).mkdirs()
+
+                project.copy {
+                    from project.zipTree(resourcesZip)
+                    into packer.resourcesBuildDir
+                }
+
+                project.copy {
+                    from project.file(packer.resourcesDir)
+                    into packer.resourcesBuildDir
+                }
+            }
+        }
+
+        project.task('build', dependsOn: project.prepare) {
+            inputs.file project.prepare.outputs.files
             inputs.file project.packer.srcDir
             outputs.dir project.packer.buildDir
 
@@ -61,8 +95,11 @@ class PackerPlugin implements Plugin<Project> {
 
 class PackerPluginExtension {
     def buildDir = 'build/packer'
+    def baseBuildDir = "$buildDir/base"
     def boxBuildDir = "$buildDir/box"
+    def resourcesBuildDir = "$buildDir/resources"
 
+    def resourcesDir = 'src/main/resources'
     def srcDir = 'src/main/packer'
 
     def distDir = 'dist'
